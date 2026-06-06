@@ -1,0 +1,129 @@
+---
+title: "Why the Bridge Pattern was the right call for multi-bank routing in BridgePay"
+date: "2025-10-15"
+excerpt: "The naive approach — a switch statement routing to StandardBank, FNB, or Absa — works until the fourth bank arrives and you're touching core business logic to add it. Here's how the Bridge Pattern kept bank implementations entirely separate from the transaction abstraction, and why that trade-off was worth the extra interfaces."
+---
+
+# Multi-Bank Routing via the Bridge Pattern
+
+In transaction processing systems, routing payments to different financial institutions is a core requirement. However, a naive implementation of this requirement often leads to tight coupling, high maintenance costs, and fragile code.
+
+In this post, we’ll explore how we solved this in **BridgePay** using the **Bridge Design Pattern**.
+
+## The Naive Approach: Switch-Case Routing
+
+When starting out, it's tempting to write a routing handler that looks like this:
+
+```csharp
+public class PaymentService
+{
+    public async Task<Response> ProcessPayment(Transaction tx)
+    {
+        switch (tx.BankName)
+        {
+            case "StandardBank":
+                return await _standardBankApi.Authorize(tx);
+            case "FNB":
+                return await _fnbApi.Authorize(tx);
+            case "ABSA":
+                return await _absaApi.Authorize(tx);
+            default:
+                throw new UnsupportedBankException();
+        }
+    }
+}
+```
+
+This violates the **Open/Closed Principle (OCP)**. Every time you onboard a new bank partner:
+1. You must modify the `ProcessPayment` method.
+2. You have to introduce a new dependency to `PaymentService`.
+3. If one bank's API requires different parameters, your transaction domain model gets polluted.
+
+## The Solution: The Bridge Pattern
+
+The **Bridge Pattern** is designed to separate an abstraction from its implementation so that the two can vary independently. In BridgePay, the "Abstraction" is the transaction processing workflow, and the "Implementation" is the concrete bank API client.
+
+```
+       Abstractions                     Implementations
+     ┌──────────────┐                  ┌──────────────┐
+     │ Payment      │◆────────────────>│ IBankApiLink │
+     │ Processor    │                  └──────────────┘
+     └──────────────┘                         ▲
+            ▲                                 │
+     ┌──────┴───────┐                  ┌──────┴───────┐
+     │ CreditCard   │                  │ StandardBank │
+     │ Processor    │                  │ ApiLink      │
+     └──────────────┘                  └──────────────┘
+```
+
+Here's how the interfaces are structured in C#:
+
+### 1. The Implementor Interface
+The implementor interface represents the gateway to external banks. It contains only primitives and raw bank parameters.
+
+```csharp
+public interface IBankApiLink
+{
+    string BankIdentifier { get; }
+    Task<BankResponse> AuthorizeAsync(decimal amount, string cardDetails);
+    Task<BankResponse> RefundAsync(string transactionId, decimal amount);
+}
+```
+
+### 2. The Abstraction
+The abstraction represents the high-level business entity (like a checkout flow). It holds a reference to an `IBankApiLink`.
+
+```csharp
+public abstract class PaymentProcessor
+{
+    protected readonly IBankApiLink BankLink;
+
+    protected PaymentProcessor(IBankApiLink bankLink)
+    {
+        BankLink = bankLink;
+    }
+
+    public abstract Task<ProcessResult> ExecuteTransactionAsync(Transaction tx);
+}
+```
+
+### 3. The Refined Abstraction
+We can specialize the abstraction (e.g., card payments vs. EFT payments) without changing the bank links.
+
+```csharp
+public class CreditCardProcessor : PaymentProcessor
+{
+    public CreditCardProcessor(IBankApiLink bankLink) : base(bankLink) {}
+
+    public override async Task<ProcessResult> ExecuteTransactionAsync(Transaction tx)
+    {
+        // Execute pre-validation
+        if (tx.Amount <= 0) return ProcessResult.Failed("Invalid amount");
+
+        // Execute payment via the bridged link
+        var response = await BankLink.AuthorizeAsync(tx.Amount, tx.CardDetails);
+
+        // Process response ledger
+        return response.Success 
+            ? ProcessResult.Ok(response.AuthCode) 
+            : ProcessResult.Failed(response.ErrorMessage);
+    }
+}
+```
+
+## Why the Trade-off is Worth It
+
+Adding a new bank to BridgePay is now as simple as implementing `IBankApiLink` and registering it in the Dependency Injection container:
+
+```csharp
+public class CapitecApiLink : IBankApiLink
+{
+    public string BankIdentifier => "Capitec";
+    public async Task<BankResponse> AuthorizeAsync(decimal amount, string cardDetails)
+    {
+        // Custom Capitec HTTP call here
+    }
+}
+```
+
+The core `CreditCardProcessor` and transaction validation workflows require **zero changes**. This isolation ensures high reliability and allows team members to work on bank integrations concurrently without merge conflicts.

@@ -1,0 +1,81 @@
+---
+title: "Investment Sentiment Analyser"
+description: "A Spring Boot NLP pipeline that analyzes JSE market news sentiment using Stanford CoreNLP."
+category: "AI & NLP"
+github: "https://github.com/PTA-Avenger"
+demo: "#"
+---
+
+# Investment Sentiment Analyser
+
+This system parses and aggregates market news headlines for Johannesburg Stock Exchange (JSE) listed companies, runs them through a linguistic classifier, and surfaces sector-wide sentiment indicators on a glassmorphic dashboard.
+
+## System Dataflow
+
+News aggregation happens in the background, feeding a structured pipeline that runs NLP analyses and saves results to a database.
+
+```
+┌─────────────────┐      Aggregate JSE News      ┌──────────────────────┐
+│  RSS Feeds &    │─────────────────────────────>│    Spring Boot       │
+│  Financial APIs │                              │    Ingestion Engine  │
+└─────────────────┘                              └──────────────────────┘
+                                                             │
+                                                             │ Sentences
+                                                             v
+┌─────────────────┐      Regex Fallback          ┌──────────────────────┐
+│ Heuristic Rule  │<─────────────────────────────│ Stanford CoreNLP     │
+│ Engine (Backup) │                              │ Sentiment Classifier │
+└─────────────────┘                              └──────────────────────┘
+        │                                                    │
+        └──────────────────────┬─────────────────────────────┘
+                               │ Structured Output
+                               v
+                       ┌───────────────┐
+                       │  PostgreSQL   │
+                       │  Ledger       │
+                       └───────────────┘
+                               │
+                               │ REST API / JSON
+                               v
+                       ┌───────────────┐
+                       │  Zero-Build   │
+                       │  React UI     │
+                       └───────────────┘
+```
+
+## Key Architectural Decisions
+
+### 1. Graceful Degradation: Rule Heuristics Fallback
+Stanford CoreNLP models are computationally expensive and can suffer from latency spikes under load or crashes during initialization. To prevent system downtime, we implemented a **Graceful Degradation** fallback pattern. 
+
+If the NLP classifier fails or times out, the ingestion engine immediately routes text to a fast regex-based rule engine. While this regex matcher is less linguistically aware, it guarantees the system remains online and returns baseline classification scores.
+
+```java
+public class SentimentService {
+    private StanfordCoreNLPPipeline nlpPipeline;
+    private RegexHeuristicsMatcher fallbackMatcher;
+
+    public SentimentScore analyze(String text) {
+        try {
+            if (nlpPipeline.isHealthy()) {
+                return nlpPipeline.classify(text);
+            }
+        } catch (Exception e) {
+            logger.warn("NLP classifier failed, falling back to regex matcher", e);
+        }
+        return fallbackMatcher.classify(text);
+    }
+}
+```
+
+### 2. Zero-Build CDN React Frontend
+To minimize deployment complexity, the React dashboard is loaded directly from a CDN inside a Spring Boot static template folder. This eliminates the need for Node.js build steps, Webpack compilation, or complex static page export configs, making the frontend completely self-contained within a standard Java runtime.
+
+## Tech Stack & Specifications
+
+| Layer | Technology | Purpose |
+| :--- | :--- | :--- |
+| **Backend Core** | Spring Boot 3 + Java 17 | Scheduler, feed aggregation, and REST endpoints |
+| **NLP Engine** | Stanford CoreNLP | Sentence parsing and sentiment tag extraction |
+| **Database** | PostgreSQL + JPA | Sector news records and sentiment history |
+| **Frontend UI** | React 18 (CDN-only) + Recharts | Responsive glassmorphic metrics visualization |

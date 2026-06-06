@@ -1,0 +1,76 @@
+---
+title: "Cross-Platform Task Manager"
+description: "A C# .NET MAUI multi-device task management application with real-time Supabase synchronization."
+category: "Cross-Platform"
+github: "https://github.com/PTA-Avenger"
+demo: "#"
+---
+
+# Cross-Platform Task Manager
+
+This project is a multi-device task management application designed to run on Android, iOS, and Windows from a single C# codebase. Architected using the MVVM pattern, it integrates real-time cloud synchronization via Supabase and features a gamified reward loop to drive task completion.
+
+## MVVM and Sync Architecture
+
+The application coordinates local state changes with remote cloud persistence using a view-model dispatcher.
+
+```
+┌──────────────────────────────────────────────┐
+│                  .NET MAUI App               │
+│                                              │
+│  ┌──────────────┐      Bind      ┌────────┐  │
+│  │   UI View    │<──────────────>│  View  │  │
+│  │ (Android/iOS)│                │ Model  │  │
+│  └──────────────┘                └────────┘  │
+│                                      │       │
+│                                      │ Calls │
+│                                      v       │
+│                                  ┌────────┐  │
+│                                  │  Data  │  │
+│                                  │ Service│  │
+│                                  └────────┘  │
+└──────────────────────────────────────┬───────┘
+                                       │
+                                       │ Real-time Sync
+                                       v
+                                ┌──────────────┐
+                                │   Supabase   │
+                                │  PostgreSQL  │
+                                └──────────────┘
+```
+
+## Key Architectural Decisions
+
+### 1. MVVM Command Pattern
+By keeping UI concerns (XAML layouts) strictly separated from state machine business logic (C# ViewModels), the codebase remains target-agnostic. Commands handle platform events safely:
+
+```csharp
+public class TaskViewModel : BaseViewModel
+{
+    private readonly ISupabaseService _syncService;
+
+    public ObservableCollection<TaskItem> Tasks { get; } = new();
+
+    public ICommand CompleteTaskCommand => new Command<TaskItem>(async (task) => 
+    {
+        task.IsCompleted = true;
+        await _syncService.UpdateTaskStatusAsync(task.Id, true);
+        // Trigger rewards logic
+    });
+}
+```
+
+### 2. Off-line Resilient Synchronization
+Mobile network stability is unpredictable. To prevent user operations from locking up during connection dropouts, we built a local sqlite buffer. If the Supabase client detects an offline state, writes are queued locally and synchronized in bulk once connection is restored, ensuring optimistic UI updates without latency.
+
+### 3. Gamification Mechanics
+To increase daily active engagement, the application incorporates experience points (XP) and task-streak multipliers. The reward logic is evaluated on state changes, calculating score multipliers locally before committing telemetry back to Supabase.
+
+## Tech Stack & Specifications
+
+| Layer | Technology | Purpose |
+| :--- | :--- | :--- |
+| **App Framework** | .NET MAUI (C#) | Single codebase targeting Android, iOS, and Windows |
+| **Backend & Auth** | Supabase | Cloud authentication and user session management |
+| **Database** | PostgreSQL | Relational storage for profiles, tasks, and XP history |
+| **State Design** | MVVM Toolkit | Property binding, messaging, and commands |

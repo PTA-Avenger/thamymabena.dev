@@ -1,0 +1,78 @@
+---
+title: "BridgePay — Payment Gateway Simulation"
+description: "A resilient distributed payment gateway decoupling merchant requests using RabbitMQ and clean architecture."
+category: "Enterprise Backend"
+github: "https://github.com/PTA-Avenger/BridgePay"
+demo: "https://bridge-ax9bt1ffx-thatos-projects-54db4cf6.vercel.app/"
+---
+
+# Technical Deep-Dive — BridgePay
+
+BridgePay is a high-throughput, resilient payment gateway simulation that showcases enterprise-grade backend architecture. By leveraging Clean Architecture, CQRS, and asynchronous message queues, the system decouples client payment submissions from slow, fragile external bank APIs.
+
+## Architecture Overview
+
+Below is the message-driven coordinator-worker design. Merchants submit transactions synchronously, which are immediately validated, queued, and processed asynchronously by worker nodes.
+
+```
+┌─────────────────┐      HTTP POST      ┌──────────────────────┐
+│  E-Commerce     │────────────────────>│    Merchant API      │
+│  Merchant (UI)  │<────────────────────│ (Immediate Pending)  │
+└─────────────────┘      202 Accepted   └──────────────────────┘
+                                                    │
+                                           Publish  │ TransactionCreatedEvent
+                                                    v
+                                        ┌──────────────────────┐
+                                        │  RabbitMQ Message    │
+                                        │  Broker (Exchange)   │
+                                        └──────────────────────┘
+                                                    │
+                                           Consume  │ Async Queue
+                                                    v
+┌─────────────────┐      gRPC Call      ┌──────────────────────┐
+│ Concrete Bank   │<────────────────────│    Worker Service    │
+│ APIs (FNB/ABSA) │                     │ (Bridge Routing)     │
+└─────────────────┘                     └──────────────────────┘
+```
+
+## Key Decisions & The Craft
+
+### 1. The Bridge Pattern for Multi-Bank Routing
+Instead of hardcoding bank routing rules within transaction handlers, BridgePay utilizes the **Bridge Pattern**. This design pattern separates the payment abstraction from the concrete bank implementations. 
+
+```csharp
+// Abstraction
+public abstract class PaymentProcessor
+{
+    protected IBankApiLink _bankApi;
+    protected PaymentProcessor(IBankApiLink bankApi)
+    {
+        _bankApi = bankApi;
+    }
+    public abstract Task<ProcessResult> ExecuteTransactionAsync(Transaction tx);
+}
+
+// Implementor
+public interface IBankApiLink
+{
+    Task<BankResponse> AuthorizeAsync(decimal amount, string cardDetails);
+}
+```
+
+By decoupling these layers, adding a new financial partner (e.g., standardizing a new Capitec or Nedbank integration) requires creating a single class implementing `IBankApiLink`. The core business transaction rules remain untouched.
+
+### 2. CQRS & MediatR for Command Separation
+We decoupled read queries from state-modifying actions. This prevents the domain model from becoming bloated with database projection code. MediatR orchestrates execution, ensuring loose coupling between the API controller layer and transaction logic.
+
+### 3. Resilience and Graceful Degradation
+Under production stress tests, the system simulates a **15% bank API failure rate**. A queue-driven retry policy ensures failed transactions are retried with exponential backoff before being placed in a Dead Letter Queue (DLQ), keeping merchants insulated from direct partner downtime.
+
+## Tech Stack & Specifications
+
+| Layer | Technology | Purpose |
+| :--- | :--- | :--- |
+| **Core Framework** | .NET 10 (C#) | Core business logic and worker nodes |
+| **Message Broker** | MassTransit + RabbitMQ | Async transaction ingestion and routing |
+| **API Architecture**| CQRS + MediatR | Command/Query segregation |
+| **Database** | PostgreSQL + EF Core | Transaction ledger and state auditing |
+| **Testing** | xUnit, Moq, WebApplicationFactory | Integration and unit tests |

@@ -1,0 +1,93 @@
+---
+title: "Zero-build React: deploying a CDN-only frontend to eliminate the Node.js requirement"
+date: "2025-06-10"
+excerpt: "For the JSE dashboard, I needed a frontend deployable alongside a Java backend without introducing a Node.js build pipeline. CDN-imported React with JSX-free component patterns proved the cleanest solution — here's the pattern."
+---
+
+# Scaffolding React Without Node.js or Webpack
+
+For developers working with enterprise languages like Java, C#, or Go, building the frontend usually involves setting up a Node.js build chain: `npm`, Webpack, Vite, Babel, and countless others. 
+
+However, introducing a Node build pipeline for simple internal dashboards increases deployment overhead. In the **Investment Sentiment Analyser**, we bypassed this entirely using a **Zero-Build CDN React** architecture.
+
+## The Objective: Single-Artifact Deployment
+
+We wanted to package the entire application inside a single executable Java `.jar` file. When Spring Boot starts, it serves the static files. Adding Node.js build tasks during CI/CD would complicate the pipeline for no real gain.
+
+Instead, we serve standard HTML, and import React, ReactDOM, and styling packages directly from a public CDN (like `unpkg` or `cdnjs`) in the browser.
+
+## The Architecture Pattern
+
+To write React without a compiler, you cannot use JSX directly (unless you load the slow browser-side Babel compiler, which is highly discouraged in production). 
+
+Instead, we use React’s native `React.createElement` or the extremely lightweight `htm` library (which enables JSX-like syntax using ES6 template literals).
+
+Here is the HTML layout template used for our JSE glassmorphic dashboard:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JSE Sentiment Dashboard</title>
+    <!-- Tailwind CSS Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM CDNs -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- HTM Library (turns ES6 template literals into React.createElement calls) -->
+    <script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
+</head>
+<body class="bg-[#080c14] text-white">
+    <div id="root"></div>
+
+    <script>
+      // Initialize htm helper bound to React
+      const html = htm.bind(React.createElement);
+      const { useState, useEffect } = React;
+
+      // Define our React component in vanilla ES6
+      function DashboardApp() {
+        const [sentiment, setSentiment] = useState(null);
+
+        useEffect(() => {
+          fetch('/api/sentiment')
+            .then(res => res.json())
+            .then(data => setSentiment(data));
+        }, []);
+
+        return html`
+          <div class="p-8">
+            <h1 class="text-2xl font-bold mb-4">JSE Live Sentiment</h1>
+            ${sentiment ? html`
+              <div class="bg-white/5 backdrop-blur border border-white/10 p-6 rounded">
+                <p>Overall Score: ${sentiment.score}</p>
+                <p>Condition: ${sentiment.condition}</p>
+              </div>
+            ` : html`<p>Loading market feeds...</p>`}
+          </div>
+        `;
+      }
+
+      // Render App to DOM
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(React.createElement(DashboardApp));
+    </script>
+</body>
+</html>
+```
+
+## Benefits and Drawbacks
+
+While this zero-build approach is extremely clean and eliminates a complete build pipeline, it is important to be aware of the trade-offs:
+
+### Advantages
+- **Zero tooling**: No Node.js, npm installs, package locks, or bundler configs.
+- **Instant deployment**: Editing code is as simple as changing a file on disk; refresh the browser to see updates instantly.
+- **Lightweight packaging**: The Java backend artifact remains small and contains no heavy node dependency modules.
+
+### Disadvantages
+- **No static tree shaking**: You load the entire library bundle from the CDN, rather than only the functions you import.
+- **Browser parsing overhead**: Using libraries like `htm` means template parsing happens in the browser. For massive, complex web applications, this can cause a minor delay in initial rendering.
+
+For dashboards, admin interfaces, and internal tooling, this pattern is exceptionally productive and proves that you don't always need a complex build pipeline to use modern UI frameworks.
