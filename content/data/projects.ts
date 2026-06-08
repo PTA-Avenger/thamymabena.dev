@@ -42,22 +42,22 @@ export const projectsData: Project[] = [
     slug: "investment-sentiment-analyser",
     num: "02 / AI & NLP",
     category: "AI & NLP",
-    title: "Investment Sentiment Analyser",
+    title: "JSE Investment Sentiment Analyser",
     problem:
       "JSE investors lack a fast, structured way to gauge market sentiment across sector news. Manual reading of financial headlines is slow and inconsistently interpreted.",
     solution:
-      "A full-stack NLP pipeline aggregating JSE sector data, applying Stanford CoreNLP for deep linguistic sentiment classification, and visualising results on a React dashboard in real time.",
+      "A full-stack Natural Language Processing (NLP) pipeline designed for Johannesburg Stock Exchange (JSE) investors. The system aggregates real-time South African financial news, classifies articles by market sector, evaluates headline sentiment using Stanford CoreNLP, and visualizes live sentiment trends on an interactive Angular dashboard.",
     patterns: [
       "Pipeline Pattern",
       "Graceful Degradation",
-      "Java 17 / Spring Boot 3",
-      "Stanford CoreNLP",
+      "Zero-Rebuild UI",
+      "Server-Sent Events (SSE)",
     ],
-    tags: ["Java 17", "Spring Boot 3", "Stanford CoreNLP", "React 18", "Recharts"],
+    tags: ["Java 17", "Spring Boot 3", "Stanford CoreNLP", "Angular 19", "H2 Database"],
     craftNote:
-      "Regex heuristic fallback keeps the system available on model failure. Zero-build React frontend (CDN-only) — a deliberate architectural choice to remove Node.js as a deployment dependency entirely.",
+      "A 5-stage pipeline pattern coordinates real-time news scraping, sector mapping, NLP classification, and SSE broadcasting. A 1500ms timeout switches to a Regex fallback engine (< 1ms) for graceful degradation on low-RAM hosts. The Angular 19 frontend connects dynamically via localStorage api overrides, achieving zero-rebuild production deployments.",
     github: "https://github.com/PTA-Avenger",
-    demo: "#",
+    demo: "https://investment-sentiment-analyser-qbhuqpk6c.vercel.app/",
     featured: true,
   },
   {
