@@ -35,7 +35,7 @@ export const projectsData: Project[] = [
     craftNote:
       "Bridge Pattern decouples merchant transaction abstraction from concrete bank implementations (MockStandardBankApi, MockFnbApi, MockAbsaApi) — adding a new bank requires zero changes to core business logic. Async queue ensures merchants get an immediate Pending response; a 15% failure rate simulator stress-tests the resilience pipeline. Unit tests cover Domain state transitions and Application command handlers; integration tests use WebApplicationFactory against the full HTTP pipeline.",
     github: "https://github.com/PTA-Avenger/BridgePay",
-    demo: "https://bridge-ax9bt1ffx-thatos-projects-54db4cf6.vercel.app/",
+    demo: "https://bridge-pay-xi.vercel.app/login",
     featured: true,
   },
   {
