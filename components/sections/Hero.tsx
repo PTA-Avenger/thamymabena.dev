@@ -101,7 +101,7 @@ export default function Hero() {
           ⌥ GitHub
         </a>
         <a
-          href="https://linkedin.com/in/thato-mabenadev"
+          href="https://www.linkedin.com/in/thato-mabena-dev/?lipi=urn%3Ali%3Apage%3Ad_flagship3_profile_view_base_contact_details%3B%2B%2F%2Fk6dhlQhCtBbCFpSnXAQ%3D%3D"
           target="_blank"
           rel="noopener noreferrer"
           className="font-mono text-[0.78rem] text-text-mid border border-border px-7 py-3.5 uppercase tracking-[0.08em] transition-all duration-200 hover:border-teal-dim hover:text-teal inline-flex items-center gap-2"
